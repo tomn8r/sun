@@ -175,6 +175,11 @@
                 <input type="checkbox" id="cond-active"> Enable Conditions
             </label>
         </div>
+        <div class="control-group">
+            <label style="display:flex; align-items:center;">
+                <input type="checkbox" id="cond-check-when-shaded"> Check conditions even when not sunlit
+            </label>
+        </div>
         
         <div class="control-group">
             <label>Elevation Range</label>
@@ -494,7 +499,7 @@ function checkAllPointsExposure() {
             if (intersects.length === 0 && dot > 0) isSunlit = true;
         }
 
-        if (isSunlit && pt.conditions.active) {
+        if ((isSunlit || pt.conditions.checkWhenShaded) && pt.conditions.active) {
             const c = pt.conditions;
             const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
             let azOk = false;
@@ -546,7 +551,7 @@ window.addPoint = function(intersect) {
         name: newName,
         mesh: mesh,
         normal: intersect.face.normal.clone(),
-        conditions: { active: false, minAlt: 0, maxAlt: 90, minAz: 0, maxAz: 360 }
+        conditions: { active: false, checkWhenShaded: false, minAlt: 0, maxAlt: 90, minAz: 0, maxAz: 360 }
     });
     selectPoint(id);
 };
@@ -559,6 +564,7 @@ window.selectPoint = function(id) {
     
     document.getElementById('pt-name').value = pt.name;
     document.getElementById('cond-active').checked = pt.conditions.active;
+    document.getElementById('cond-check-when-shaded').checked = pt.conditions.checkWhenShaded;
     document.getElementById('cond-min-alt').value = pt.conditions.minAlt;
     document.getElementById('cond-max-alt').value = pt.conditions.maxAlt;
     document.getElementById('cond-min-az').value = pt.conditions.minAz;
@@ -636,12 +642,13 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
 
 document.getElementById('btn-delete').addEventListener('click', deleteSelectedPoint);
 
-['pt-name', 'cond-active', 'cond-min-alt', 'cond-max-alt', 'cond-min-az', 'cond-max-az'].forEach(id => {
+['pt-name', 'cond-active', 'cond-check-when-shaded', 'cond-min-alt', 'cond-max-alt', 'cond-min-az', 'cond-max-az'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => {
         if (!selectedPointID) return;
         const pt = points.find(p => p.id === selectedPointID);
         pt.name = document.getElementById('pt-name').value;
         pt.conditions.active = document.getElementById('cond-active').checked;
+        pt.conditions.checkWhenShaded = document.getElementById('cond-check-when-shaded').checked;
         pt.conditions.minAlt = parseFloat(document.getElementById('cond-min-alt').value);
         pt.conditions.maxAlt = parseFloat(document.getElementById('cond-max-alt').value);
         pt.conditions.minAz = parseFloat(document.getElementById('cond-min-az').value);
@@ -730,7 +737,7 @@ window.loadState = function() {
             name: pd.name,
             mesh: mesh,
             normal: new THREE.Vector3().fromArray(pd.norm),
-            conditions: pd.conditions
+            conditions: { ...pd.conditions, checkWhenShaded: pd.conditions.checkWhenShaded ?? false }
         });
     });
     
