@@ -499,7 +499,7 @@ function checkAllPointsExposure() {
             if (intersects.length === 0 && dot > 0) isSunlit = true;
         }
 
-        if ((isSunlit || pt.conditions.checkWhenShaded) && pt.conditions.active) {
+        if ((isSunlit || (pt.conditions.checkWhenShaded === true)) && pt.conditions.active) {
             const c = pt.conditions;
             const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
             let azOk = false;
@@ -564,7 +564,7 @@ window.selectPoint = function(id) {
     
     document.getElementById('pt-name').value = pt.name;
     document.getElementById('cond-active').checked = pt.conditions.active;
-    document.getElementById('cond-check-when-shaded').checked = pt.conditions.checkWhenShaded;
+    document.getElementById('cond-check-when-shaded').checked = pt.conditions.checkWhenShaded ?? false;
     document.getElementById('cond-min-alt').value = pt.conditions.minAlt;
     document.getElementById('cond-max-alt').value = pt.conditions.maxAlt;
     document.getElementById('cond-min-az').value = pt.conditions.minAz;
