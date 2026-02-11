@@ -504,11 +504,14 @@ function checkAllPointsExposure() {
 
         if ((isSunlit || (pt.conditions.checkWhenShaded === true)) && pt.conditions.active) {
             const c = pt.conditions;
-            const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
-            let azOk = false;
-            if (c.minAz <= c.maxAz) azOk = currentSunAz >= c.minAz && currentSunAz <= c.maxAz;
-            else azOk = currentSunAz >= c.minAz || currentSunAz <= c.maxAz;
-            if (altOk && azOk) isTargetMet = true;
+            // Validate all condition values are valid numbers before checking
+            if (!isNaN(c.minAlt) && !isNaN(c.maxAlt) && !isNaN(c.minAz) && !isNaN(c.maxAz)) {
+                const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
+                let azOk = false;
+                if (c.minAz <= c.maxAz) azOk = currentSunAz >= c.minAz && currentSunAz <= c.maxAz;
+                else azOk = currentSunAz >= c.minAz || currentSunAz <= c.maxAz;
+                if (altOk && azOk) isTargetMet = true;
+            }
         }
 
         let color = isNight ? 0x333333 : (isTargetMet ? 0xffd700 : (isSunlit ? 0x00ff00 : 0xff0000));
@@ -654,10 +657,16 @@ document.getElementById('btn-delete').addEventListener('click', deleteSelectedPo
         pt.name = document.getElementById('pt-name').value;
         pt.conditions.active = document.getElementById('cond-active').checked;
         pt.conditions.checkWhenShaded = document.getElementById('cond-check-when-shaded').checked;
-        pt.conditions.minAlt = parseFloat(document.getElementById('cond-min-alt').value);
-        pt.conditions.maxAlt = parseFloat(document.getElementById('cond-max-alt').value);
-        pt.conditions.minAz = parseFloat(document.getElementById('cond-min-az').value);
-        pt.conditions.maxAz = parseFloat(document.getElementById('cond-max-az').value);
+        // Parse numeric inputs with fallback to existing values if NaN
+        const newMinAlt = parseFloat(document.getElementById('cond-min-alt').value);
+        const newMaxAlt = parseFloat(document.getElementById('cond-max-alt').value);
+        const newMinAz = parseFloat(document.getElementById('cond-min-az').value);
+        const newMaxAz = parseFloat(document.getElementById('cond-max-az').value);
+        // Only update if the parsed value is a valid number
+        if (!isNaN(newMinAlt)) pt.conditions.minAlt = newMinAlt;
+        if (!isNaN(newMaxAlt)) pt.conditions.maxAlt = newMaxAlt;
+        if (!isNaN(newMinAz)) pt.conditions.minAz = newMinAz;
+        if (!isNaN(newMaxAz)) pt.conditions.maxAz = newMaxAz;
         checkAllPointsExposure();
     });
 });
