@@ -506,7 +506,10 @@ function checkAllPointsExposure() {
             const c = pt.conditions;
             // Validate all condition values are valid numbers before checking
             if (!isNaN(c.minAlt) && !isNaN(c.maxAlt) && !isNaN(c.minAz) && !isNaN(c.maxAz)) {
-                const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
+                // Normalize altitude range (user may set min > max when sun altitude decreases)
+                const actualMinAlt = Math.min(c.minAlt, c.maxAlt);
+                const actualMaxAlt = Math.max(c.minAlt, c.maxAlt);
+                const altOk = currentSunAlt >= actualMinAlt && currentSunAlt <= actualMaxAlt;
                 let azOk = false;
                 if (c.minAz <= c.maxAz) azOk = currentSunAz >= c.minAz && currentSunAz <= c.maxAz;
                 else azOk = currentSunAz >= c.minAz || currentSunAz <= c.maxAz;
