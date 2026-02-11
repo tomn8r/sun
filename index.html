@@ -175,6 +175,11 @@
                 <input type="checkbox" id="cond-active"> Enable Conditions
             </label>
         </div>
+        <div class="control-group">
+            <label style="display:flex; align-items:center;">
+                <input type="checkbox" id="cond-check-when-shaded"> Check conditions even when not sunlit
+            </label>
+        </div>
         
         <div class="control-group">
             <label>Elevation Range</label>
@@ -425,15 +430,18 @@ function updateSun() {
     // FIX: Calculate raw azimuth and strictly normalize to 0-360 range
     // SunCalc returns South=0, we want North=0 (Standard Compass)
     const rawAz = (sunPos.azimuth * (180/Math.PI)) + 180;
-    currentSunAz = (rawAz + 360) % 360; 
+    // Improved normalization handles all edge cases including very negative values
+    currentSunAz = ((rawAz % 360) + 360) % 360;
     
     updateEnvironment(currentSunAlt);
 
     // Visual Position (Three.js coordinates)
+    // Apply same +180° offset as currentSunAz to align visual with condition checking
+    const azimuthCompass = sunPos.azimuth + Math.PI;
     const dist = 80;
-    const x = dist * Math.cos(sunPos.altitude) * Math.sin(sunPos.azimuth);
+    const x = dist * Math.cos(sunPos.altitude) * Math.sin(azimuthCompass);
     const y = dist * Math.sin(sunPos.altitude);
-    const z = dist * Math.cos(sunPos.altitude) * Math.cos(sunPos.azimuth);
+    const z = dist * Math.cos(sunPos.altitude) * Math.cos(azimuthCompass);
 
     sunLight.position.set(x, y, z);
     sunSphere.position.set(x, y, z);
@@ -494,13 +502,31 @@ function checkAllPointsExposure() {
             if (intersects.length === 0 && dot > 0) isSunlit = true;
         }
 
-        if (isSunlit && pt.conditions.active) {
+        if ((isSunlit || (pt.conditions.checkWhenShaded === true)) && pt.conditions.active) {
             const c = pt.conditions;
-            const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
-            let azOk = false;
-            if (c.minAz <= c.maxAz) azOk = currentSunAz >= c.minAz && currentSunAz <= c.maxAz;
-            else azOk = currentSunAz >= c.minAz || currentSunAz <= c.maxAz;
-            if (altOk && azOk) isTargetMet = true;
+            // Validate all condition values are valid numbers before checking
+            if (!isNaN(c.minAlt) && !isNaN(c.maxAlt) && !isNaN(c.minAz) && !isNaN(c.maxAz)) {
+                // Calculate azimuth span (handle wrap-around at 0°/360°)
+                const azSpan = c.maxAz >= c.minAz ? c.maxAz - c.minAz : 360 - c.minAz + c.maxAz;
+                let altOk = false;
+                
+                if (azSpan > 180) {
+                    // Large azimuth span - sun's path includes altitude peak above endpoints
+                    // Only check altitude >= minimum (allows sun to rise higher mid-range)
+                    const minAltitude = Math.min(c.minAlt, c.maxAlt);
+                    altOk = currentSunAlt >= minAltitude;
+                } else {
+                    // Smaller span - use full altitude range
+                    const actualMinAlt = Math.min(c.minAlt, c.maxAlt);
+                    const actualMaxAlt = Math.max(c.minAlt, c.maxAlt);
+                    altOk = currentSunAlt >= actualMinAlt && currentSunAlt <= actualMaxAlt;
+                }
+                
+                let azOk = false;
+                if (c.minAz <= c.maxAz) azOk = currentSunAz >= c.minAz && currentSunAz <= c.maxAz;
+                else azOk = currentSunAz >= c.minAz || currentSunAz <= c.maxAz;
+                if (altOk && azOk) isTargetMet = true;
+            }
         }
 
         let color = isNight ? 0x333333 : (isTargetMet ? 0xffd700 : (isSunlit ? 0x00ff00 : 0xff0000));
@@ -512,7 +538,9 @@ function checkAllPointsExposure() {
             else if (isTargetMet) { selectedStatusText = "CONDITION MET"; selectedStatusClass = "status-box target"; }
             else if (isSunlit) { selectedStatusText = "SUNLIT"; selectedStatusClass = "status-box sunlit"; }
             else { selectedStatusText = "SHADED"; selectedStatusClass = "status-box shaded"; }
-            selectedSubText = `Sun Alt: ${Math.round(currentSunAlt)}° | Az: ${Math.round(currentSunAz)}°`;
+            // Display azimuth normalized to 0-359 range (360° shows as 0°)
+            const displayAz = Math.round(currentSunAz) % 360;
+            selectedSubText = `Sun Alt: ${Math.round(currentSunAlt)}° | Az: ${displayAz}°`;
         } else {
             pt.mesh.material.color.setHex(color);
             pt.mesh.scale.setScalar(1.0);
@@ -546,7 +574,7 @@ window.addPoint = function(intersect) {
         name: newName,
         mesh: mesh,
         normal: intersect.face.normal.clone(),
-        conditions: { active: false, minAlt: 0, maxAlt: 90, minAz: 0, maxAz: 360 }
+        conditions: { active: false, checkWhenShaded: false, minAlt: 0, maxAlt: 90, minAz: 0, maxAz: 360 }
     });
     selectPoint(id);
 };
@@ -559,6 +587,7 @@ window.selectPoint = function(id) {
     
     document.getElementById('pt-name').value = pt.name;
     document.getElementById('cond-active').checked = pt.conditions.active;
+    document.getElementById('cond-check-when-shaded').checked = pt.conditions.checkWhenShaded ?? false;
     document.getElementById('cond-min-alt').value = pt.conditions.minAlt;
     document.getElementById('cond-max-alt').value = pt.conditions.maxAlt;
     document.getElementById('cond-min-az').value = pt.conditions.minAz;
@@ -636,16 +665,23 @@ renderer.domElement.addEventListener('pointerdown', (event) => {
 
 document.getElementById('btn-delete').addEventListener('click', deleteSelectedPoint);
 
-['pt-name', 'cond-active', 'cond-min-alt', 'cond-max-alt', 'cond-min-az', 'cond-max-az'].forEach(id => {
+['pt-name', 'cond-active', 'cond-check-when-shaded', 'cond-min-alt', 'cond-max-alt', 'cond-min-az', 'cond-max-az'].forEach(id => {
     document.getElementById(id).addEventListener('input', () => {
         if (!selectedPointID) return;
         const pt = points.find(p => p.id === selectedPointID);
         pt.name = document.getElementById('pt-name').value;
         pt.conditions.active = document.getElementById('cond-active').checked;
-        pt.conditions.minAlt = parseFloat(document.getElementById('cond-min-alt').value);
-        pt.conditions.maxAlt = parseFloat(document.getElementById('cond-max-alt').value);
-        pt.conditions.minAz = parseFloat(document.getElementById('cond-min-az').value);
-        pt.conditions.maxAz = parseFloat(document.getElementById('cond-max-az').value);
+        pt.conditions.checkWhenShaded = document.getElementById('cond-check-when-shaded').checked;
+        // Parse numeric inputs with fallback to existing values if NaN
+        const newMinAlt = parseFloat(document.getElementById('cond-min-alt').value);
+        const newMaxAlt = parseFloat(document.getElementById('cond-max-alt').value);
+        const newMinAz = parseFloat(document.getElementById('cond-min-az').value);
+        const newMaxAz = parseFloat(document.getElementById('cond-max-az').value);
+        // Only update if the parsed value is a valid number
+        if (!isNaN(newMinAlt)) pt.conditions.minAlt = newMinAlt;
+        if (!isNaN(newMaxAlt)) pt.conditions.maxAlt = newMaxAlt;
+        if (!isNaN(newMinAz)) pt.conditions.minAz = newMinAz;
+        if (!isNaN(newMaxAz)) pt.conditions.maxAz = newMaxAz;
         checkAllPointsExposure();
     });
 });
@@ -730,7 +766,7 @@ window.loadState = function() {
             name: pd.name,
             mesh: mesh,
             normal: new THREE.Vector3().fromArray(pd.norm),
-            conditions: pd.conditions
+            conditions: { ...pd.conditions, checkWhenShaded: pd.conditions.checkWhenShaded ?? false }
         });
     });
     
