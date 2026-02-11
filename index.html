@@ -506,17 +506,17 @@ function checkAllPointsExposure() {
             const c = pt.conditions;
             // Validate all condition values are valid numbers before checking
             if (!isNaN(c.minAlt) && !isNaN(c.maxAlt) && !isNaN(c.minAz) && !isNaN(c.maxAz)) {
-                // Check altitude based on azimuth span
-                const azSpan = c.maxAz - c.minAz;
+                // Calculate azimuth span (handle wrap-around at 0°/360°)
+                const azSpan = c.maxAz >= c.minAz ? c.maxAz - c.minAz : 360 - c.minAz + c.maxAz;
                 let altOk = false;
                 
                 if (azSpan > 180) {
-                    // Large azimuth range likely crosses solar noon
-                    // Sun rises above start/end altitudes - only check minimum
+                    // Large azimuth span - sun's path includes altitude peak above endpoints
+                    // Only check altitude >= minimum (allows sun to rise higher mid-range)
                     const minAltitude = Math.min(c.minAlt, c.maxAlt);
                     altOk = currentSunAlt >= minAltitude;
                 } else {
-                    // Normal case - use full altitude range
+                    // Smaller span - use full altitude range
                     const actualMinAlt = Math.min(c.minAlt, c.maxAlt);
                     const actualMaxAlt = Math.max(c.minAlt, c.maxAlt);
                     altOk = currentSunAlt >= actualMinAlt && currentSunAlt <= actualMaxAlt;
