@@ -1,0 +1,773 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Solar Study Tool</title>
+    <style>
+        body { margin: 0; overflow: hidden; font-family: 'Helvetica Neue', sans-serif; background: #000; }
+        
+        /* Main Control Panel (Left) */
+        #ui-container {
+            position: absolute; top: 20px; left: 20px; width: 340px;
+            background: rgba(255, 255, 255, 0.95); padding: 20px;
+            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            max-height: 90vh; overflow-y: auto;
+            z-index: 10;
+        }
+
+        /* Instructions Card (Right) */
+        #instructions-card {
+            position: absolute; top: 20px; right: 20px; width: 280px;
+            background: rgba(255, 255, 255, 0.95); padding: 15px;
+            border-radius: 12px; box-shadow: 0 10px 30px rgba(0,0,0,0.3);
+            backdrop-filter: blur(10px);
+            z-index: 10;
+            font-size: 11px; color: #444; line-height: 1.5;
+        }
+        #instructions-card h3 { margin: 0 0 10px 0; font-size: 13px; border-bottom: 1px solid #eee; padding-bottom: 5px; }
+        #instructions-card ul { padding-left: 20px; margin: 0; }
+        #instructions-card li { margin-bottom: 5px; }
+        
+        h2 { margin: 0 0 10px 0; font-size: 18px; color: #333; }
+        
+        .control-group { margin-bottom: 10px; }
+        label { display: block; font-size: 11px; text-transform: uppercase; letter-spacing: 0.5px; color: #666; margin-bottom: 4px; font-weight: 700;}
+        
+        input[type="number"], input[type="range"], input[type="text"] { width: 100%; box-sizing: border-box; }
+        input[type="range"] { margin-top: 5px; cursor: pointer; accent-color: #333; }
+        input[type="checkbox"] { width: auto; margin-right: 8px; }
+        input[type="file"] { font-size: 11px; }
+        textarea { width: 100%; height: 60px; font-family: monospace; font-size: 10px; border: 1px solid #ccc; resize: vertical; }
+
+        /* Input Rows with Set Buttons */
+        .row-inputs { display: flex; gap: 5px; align-items: center; }
+        .input-wrapper { flex: 1; position: relative; }
+        
+        .btn-set {
+            padding: 0 5px; height: 24px; border: 1px solid #ccc; background: #e9ecef; 
+            border-radius: 4px; cursor: pointer; font-size: 12px; color: #333;
+            display: flex; align-items: center; justify-content: center;
+        }
+        .btn-set:hover { background: #dbe0e5; }
+        .btn-set:active { background: #ccc; }
+
+        .status-box {
+            margin-top: 15px; padding: 10px; border-radius: 6px;
+            background: #f4f4f4; border: 1px solid #ddd;
+            font-size: 13px; color: #444; min-height: 40px;
+            display: flex; flex-direction: column; align-items: center; justify-content: center;
+            font-weight: bold; text-align: center;
+        }
+        .status-subtext { font-size: 10px; font-weight: normal; margin-top: 4px; opacity: 0.8; }
+
+        .sunlit { background-color: #d4edda; color: #155724; border-color: #c3e6cb; } 
+        .shaded { background-color: #f8d7da; color: #721c24; border-color: #f5c6cb; } 
+        .target { background-color: #fff3cd; color: #856404; border-color: #ffeeba; } 
+        .night  { background-color: #343a40; color: #f8f9fa; border-color: #454d55; }
+
+        .btn-group { display: flex; gap: 10px; margin-top: 10px; }
+        button {
+            flex: 1; padding: 8px; border: none; border-radius: 4px;
+            cursor: pointer; font-weight: 600; font-size: 11px;
+            transition: background 0.2s;
+        }
+        .btn-del { background: #ffcccc; color: #990000; }
+        .btn-del:hover { background: #ffaaaa; }
+        .btn-action { background: #e2e6ea; color: #333; }
+        .btn-action:hover { background: #dbe0e5; }
+        .btn-primary { background: #007bff; color: white; }
+        .btn-primary:hover { background: #0056b3; }
+        
+        #conditions-panel, #export-modal { display: none; }
+        #export-modal { position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); z-index: 1000; }
+        #export-content { background: white; width: 80%; max-width: 600px; margin: 50px auto; padding: 20px; border-radius: 8px; }
+
+        .hint { font-size: 10px; color: #888; margin-top: 8px; text-align: center; }
+        .val-display { float: right; font-weight: normal; color: #777; }
+    </style>
+</head>
+<body>
+
+<div id="instructions-card">
+    <h3>Instructions</h3>
+    <ul>
+        <li><b>Add Point:</b> Left-Click on the house model.</li>
+        <li><b>Conditions:</b> Select a point to set Sun Elevation or Azimuth triggers.</li>
+        <li><b>Auto-Set:</b> Use the target button (⌖) to lock in the current sun position as a Min/Max limit.</li>
+        <li><b>Colors:</b> <span style="color:green; font-weight:bold;">Green</span>=Sunlit, <span style="color:red; font-weight:bold;">Red</span>=Shaded, <span style="color:#d4a017; font-weight:bold;">Gold</span>=Conditions Met.</li>
+        <li><b>Custom Model:</b> Open "House Model" -> "Upload .GLB" for CAD files.</li>
+        <li><b>Save:</b> "Save Settings" stores data in browser.</li>
+    </ul>
+    <div style="text-align:center; margin-top:10px; color:#888; cursor:pointer;" onclick="this.parentElement.style.display='none'">[Hide Instructions]</div>
+</div>
+
+<div id="ui-container">
+    <h2>Solar Analysis Tool</h2>
+    
+    <div class="control-group">
+        <label>Time of Day <span id="time-display" class="val-display">12:00</span></label>
+        <input type="range" id="time-slider" min="0" max="1439" value="720">
+    </div>
+    <div class="control-group">
+        <label>Date <span id="date-display" class="val-display">June 21</span></label>
+        <input type="range" id="day-slider" min="0" max="364" value="172">
+    </div>
+
+    <details open style="margin-top: 15px;">
+        <summary style="font-size: 11px; color: #666; cursor: pointer; margin-bottom: 10px;">House Model</summary>
+        
+        <div class="control-group">
+            <label>Orientation <span id="rot-display" class="val-display">0°</span></label>
+            <input type="range" id="rotation" min="0" max="360" value="0">
+        </div>
+
+        <div id="dims-container">
+            <div class="control-group">
+                <label>Width (m)</label><input type="number" id="width" value="10" step="0.5">
+            </div>
+            <div class="control-group">
+                <label>Depth (m)</label><input type="number" id="depth" value="15" step="0.5">
+            </div>
+            <div class="control-group">
+                <label>Height (m)</label><input type="number" id="height" value="6" step="0.5">
+            </div>
+        </div>
+
+        <div class="control-group" style="margin-top: 15px; border-top: 1px solid #eee; padding-top: 10px;">
+            <label>Manage Model</label>
+            <div class="btn-group">
+                <button class="btn-action" onclick="document.getElementById('file-input').click()">Upload .GLB</button>
+                <button class="btn-action" onclick="exportHouseModel()">Export .GLB</button>
+            </div>
+            <input type="file" id="file-input" accept=".glb,.gltf" style="display: none;" onchange="handleFileUpload(this)">
+            
+            <button id="btn-remove-model" class="btn-del" style="width:100%; margin-top:10px; display:none;" onclick="removeCustomModel()">Remove Custom Model</button>
+        </div>
+    </details>
+
+    <details style="margin-top: 10px;">
+        <summary style="font-size: 11px; color: #666; cursor: pointer; margin-bottom: 10px;">Location</summary>
+        <div class="control-group">
+            <label>Latitude</label><input type="number" id="lat" value="-33.96" step="0.01">
+        </div>
+        <div class="control-group">
+            <label>Longitude</label><input type="number" id="lon" value="151.24" step="0.01">
+        </div>
+    </details>
+
+    <div class="btn-group">
+        <button class="btn-action" onclick="saveState()" title="Save to Browser">Save Settings</button>
+        <button class="btn-action" onclick="generateHA()" title="Home Assistant YAML">Export HA</button>
+    </div>
+
+    <div id="status" class="status-box">
+        Click house to add sensor points.
+    </div>
+
+    <div id="conditions-panel" style="margin-top:10px; background: #f8f9fa; padding: 10px; border-radius: 6px; border: 1px solid #eee;">
+        <div class="control-group">
+            <label>Sensor Name</label>
+            <input type="text" id="pt-name" placeholder="Name">
+        </div>
+        <div class="control-group">
+            <label style="display:flex; align-items:center;">
+                <input type="checkbox" id="cond-active"> Enable Conditions
+            </label>
+        </div>
+        
+        <div class="control-group">
+            <label>Elevation Range</label>
+            <div class="row-inputs">
+                <div class="input-wrapper">
+                    <input type="number" id="cond-min-alt" placeholder="Min">
+                </div>
+                <button class="btn-set" onclick="setFromSun('alt', 'min')" title="Set to current Sun Elevation">⌖</button>
+                
+                <div class="input-wrapper">
+                    <input type="number" id="cond-max-alt" placeholder="Max">
+                </div>
+                <button class="btn-set" onclick="setFromSun('alt', 'max')" title="Set to current Sun Elevation">⌖</button>
+            </div>
+        </div>
+        
+        <div class="control-group">
+            <label>Azimuth Range</label>
+            <div class="row-inputs">
+                <div class="input-wrapper">
+                    <input type="number" id="cond-min-az" placeholder="Min">
+                </div>
+                <button class="btn-set" onclick="setFromSun('az', 'min')" title="Set to current Sun Azimuth">⌖</button>
+                
+                <div class="input-wrapper">
+                    <input type="number" id="cond-max-az" placeholder="Max">
+                </div>
+                <button class="btn-set" onclick="setFromSun('az', 'max')" title="Set to current Sun Azimuth">⌖</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="btn-group" id="selection-buttons" style="display:none;">
+        <button id="btn-delete" class="btn-del">Delete Point</button>
+        <button class="btn-action" onclick="clearAllPoints()">Clear All</button>
+    </div>
+    
+    <div class="hint">Left Click: Add/Select | Right Click: Pan</div>
+</div>
+
+<div id="export-modal">
+    <div id="export-content">
+        <h2>Home Assistant YAML</h2>
+        <p style="font-size: 12px; color: #666;">Copy into <code>configuration.yaml</code> or <code>templates.yaml</code>.</p>
+        <textarea id="ha-yaml-output" style="height: 300px;"></textarea>
+        <div class="btn-group">
+            <button class="btn-primary" onclick="closeModal()">Close</button>
+            <button class="btn-action" onclick="copyToClipboard()">Copy to Clipboard</button>
+        </div>
+    </div>
+</div>
+
+<script type="importmap">
+  {
+    "imports": {
+      "three": "https://unpkg.com/three@0.160.0/build/three.module.js",
+      "three/addons/": "https://unpkg.com/three@0.160.0/examples/jsm/"
+    }
+  }
+</script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/suncalc/1.9.0/suncalc.min.js"></script>
+
+<script type="module">
+import * as THREE from 'three';
+import { OrbitControls } from 'three/addons/controls/OrbitControls.js';
+import { GLTFLoader } from 'three/addons/loaders/GLTFLoader.js';
+import { GLTFExporter } from 'three/addons/exporters/GLTFExporter.js';
+
+// --- Scene Setup ---
+const scene = new THREE.Scene();
+scene.background = new THREE.Color(0xdcecf5); 
+scene.fog = new THREE.Fog(0xdcecf5, 20, 150);
+
+const camera = new THREE.PerspectiveCamera(45, window.innerWidth / window.innerHeight, 0.1, 1000);
+camera.position.set(0, 40, 50); 
+
+const renderer = new THREE.WebGLRenderer({ antialias: true });
+renderer.setSize(window.innerWidth, window.innerHeight);
+renderer.shadowMap.enabled = true;
+renderer.shadowMap.type = THREE.PCFSoftShadowMap; 
+renderer.toneMapping = THREE.ACESFilmicToneMapping;
+document.body.appendChild(renderer.domElement);
+
+const controls = new OrbitControls(camera, renderer.domElement);
+controls.enableDamping = true;
+controls.maxPolarAngle = Math.PI / 2 - 0.05;
+
+// --- Lighting ---
+const ambientLight = new THREE.HemisphereLight(0xffffff, 0x444444, 0.5);
+scene.add(ambientLight);
+
+const sunLight = new THREE.DirectionalLight(0xffffff, 1.5);
+sunLight.castShadow = true;
+sunLight.shadow.mapSize.width = 2048;
+sunLight.shadow.mapSize.height = 2048;
+sunLight.shadow.camera.near = 0.5;
+sunLight.shadow.camera.far = 200;
+sunLight.shadow.camera.left = -50;
+sunLight.shadow.camera.right = 50;
+sunLight.shadow.camera.top = 50;
+sunLight.shadow.camera.bottom = -50;
+sunLight.shadow.bias = -0.0005; 
+scene.add(sunLight);
+
+const sunSphere = new THREE.Mesh(new THREE.SphereGeometry(2, 32, 32), new THREE.MeshBasicMaterial({ color: 0xffff00 }));
+scene.add(sunSphere);
+
+// --- Objects ---
+const ground = new THREE.Mesh(new THREE.PlaneGeometry(500, 500), new THREE.MeshStandardMaterial({ color: 0xf0f0f0 }));
+ground.rotation.x = -Math.PI / 2;
+ground.receiveShadow = true;
+scene.add(ground);
+
+const gridHelper = new THREE.GridHelper(200, 100, 0xcccccc, 0xeeeeee);
+gridHelper.position.y = 0.01;
+scene.add(gridHelper);
+
+const northArrow = new THREE.ArrowHelper(new THREE.Vector3(0, 0, -1), new THREE.Vector3(0, 0.2, 0), 8, 0xff0000, 2, 1);
+scene.add(northArrow);
+
+const canvas = document.createElement('canvas');
+const ctx = canvas.getContext('2d');
+ctx.font = "Bold 40px Arial"; ctx.fillStyle = "rgba(200,0,0,1)"; ctx.fillText("N", 0, 40);
+const sprite = new THREE.Sprite(new THREE.SpriteMaterial({ map: new THREE.CanvasTexture(canvas) }));
+sprite.scale.set(4, 2, 1); sprite.position.set(0, 1, -11);
+scene.add(sprite);
+
+const houseGroup = new THREE.Group();
+scene.add(houseGroup);
+let house;
+let isCustomModel = false;
+const houseMaterial = new THREE.MeshStandardMaterial({ color: 0xffffff, roughness: 0.7 });
+
+// --- Data ---
+let points = []; 
+let selectedPointID = null;
+let currentSunAlt = 0; 
+let currentSunAz = 0;  
+
+const raycaster = new THREE.Raycaster();
+const mouse = new THREE.Vector2();
+
+// --- Logic ---
+
+function getNextDefaultName() {
+    let counter = 1;
+    let name = `Point ${counter}`;
+    while (points.some(p => p.name === name)) {
+        counter++;
+        name = `Point ${counter}`;
+    }
+    return name;
+}
+
+function createHouse(w, h, d, keepPoints = false) {
+    if (house) {
+        if(!keepPoints) clearPoints();
+        houseGroup.remove(house);
+    }
+    house = new THREE.Mesh(new THREE.BoxGeometry(w, h, d), houseMaterial);
+    house.castShadow = true; house.receiveShadow = true;
+    house.position.y = h / 2;
+    houseGroup.add(house);
+    
+    isCustomModel = false;
+    document.getElementById('dims-container').style.display = 'block';
+    document.getElementById('btn-remove-model').style.display = 'none';
+}
+
+window.handleFileUpload = function(input) {
+    const file = input.files[0];
+    if(!file) return;
+    const reader = new FileReader();
+    reader.onload = function(e) {
+        const loader = new GLTFLoader();
+        loader.parse(e.target.result, '', function(gltf) {
+            if(house) {
+                houseGroup.remove(house);
+                clearPoints();
+            }
+            house = gltf.scene;
+            house.traverse((child) => {
+                if (child.isMesh) {
+                    child.castShadow = true; child.receiveShadow = true; child.material = houseMaterial; 
+                }
+            });
+            const box = new THREE.Box3().setFromObject(house);
+            const center = box.getCenter(new THREE.Vector3());
+            house.position.x = -center.x; house.position.y = -box.min.y; house.position.z = -center.z;
+            houseGroup.add(house);
+            isCustomModel = true;
+            document.getElementById('dims-container').style.display = 'none';
+            document.getElementById('btn-remove-model').style.display = 'block';
+            updateSun();
+        }, (err) => console.error(err));
+    };
+    reader.readAsArrayBuffer(file);
+    input.value = '';
+};
+
+window.removeCustomModel = function() {
+    createHouse(
+        document.getElementById('width').value,
+        document.getElementById('height').value,
+        document.getElementById('depth').value
+    );
+};
+
+window.exportHouseModel = function() {
+    const exporter = new GLTFExporter();
+    exporter.parse(houseGroup, function (gltf) {
+        const output = JSON.stringify(gltf, null, 2);
+        const blob = new Blob([output], { type: 'text/plain' });
+        const link = document.createElement('a');
+        link.href = URL.createObjectURL(blob);
+        link.download = 'solar_study_model.gltf';
+        link.click();
+    }, (error) => console.error(error), { binary: false });
+};
+
+// --- Sun & Logic ---
+const Colors = {
+    Night: { sky: 0x020210, sun: 0x000000, ambient: 0x050515, ambInt: 0.1 },
+    Dawn:  { sky: 0xffcc99, sun: 0xffaa00, ambient: 0x403040, ambInt: 0.4 },
+    Day:   { sky: 0x87CEEB, sun: 0xffffff, ambient: 0xffffff, ambInt: 0.6 },
+};
+function lerpColor(c1, c2, alpha) { return new THREE.Color(c1).lerp(new THREE.Color(c2), alpha); }
+
+function updateSun() {
+    const lat = parseFloat(document.getElementById('lat').value);
+    const lon = parseFloat(document.getElementById('lon').value);
+    const minutes = parseInt(document.getElementById('time-slider').value);
+    const dayOfYear = parseInt(document.getElementById('day-slider').value);
+    
+    const now = new Date(new Date().getFullYear(), 0, 1);
+    now.setDate(dayOfYear + 1);
+    now.setHours(Math.floor(minutes / 60));
+    now.setMinutes(minutes % 60);
+    
+    document.getElementById('time-display').innerText = 
+        `${String(now.getHours()).padStart(2, '0')}:${String(now.getMinutes()).padStart(2, '0')}`;
+    const options = { month: 'short', day: 'numeric' };
+    document.getElementById('date-display').innerText = now.toLocaleDateString('en-US', options);
+
+    const sunPos = SunCalc.getPosition(now, lat, lon);
+    currentSunAlt = sunPos.altitude * (180/Math.PI);
+    
+    // FIX: Calculate raw azimuth and strictly normalize to 0-360 range
+    // SunCalc returns South=0, we want North=0 (Standard Compass)
+    const rawAz = (sunPos.azimuth * (180/Math.PI)) + 180;
+    currentSunAz = (rawAz + 360) % 360; 
+    
+    updateEnvironment(currentSunAlt);
+
+    // Visual Position (Three.js coordinates)
+    const dist = 80;
+    const x = dist * Math.cos(sunPos.altitude) * Math.sin(sunPos.azimuth);
+    const y = dist * Math.sin(sunPos.altitude);
+    const z = dist * Math.cos(sunPos.altitude) * Math.cos(sunPos.azimuth);
+
+    sunLight.position.set(x, y, z);
+    sunSphere.position.set(x, y, z);
+    sunLight.target.position.set(0, 0, 0); 
+    
+    checkAllPointsExposure();
+}
+
+function updateEnvironment(alt) {
+    let t = 0;
+    if (alt < -6) {
+        scene.background = new THREE.Color(Colors.Night.sky);
+        ambientLight.color.setHex(Colors.Night.ambient); ambientLight.intensity = Colors.Night.ambInt;
+        sunLight.intensity = 0; sunSphere.visible = false;
+    } else if (alt < 6) {
+        t = (alt + 6) / 12;
+        scene.background = lerpColor(Colors.Night.sky, Colors.Dawn.sky, t);
+        ambientLight.color = lerpColor(Colors.Night.ambient, Colors.Dawn.ambient, t);
+        ambientLight.intensity = THREE.MathUtils.lerp(Colors.Night.ambInt, Colors.Dawn.ambInt, t);
+        sunLight.color = lerpColor(0xff4500, 0xffaa00, t); sunLight.intensity = 0.5;
+        sunSphere.visible = true; sunSphere.material.color.setHex(0xff4500);
+    } else {
+        t = Math.min((alt - 6) / 20, 1);
+        scene.background = lerpColor(Colors.Dawn.sky, Colors.Day.sky, t);
+        ambientLight.color = lerpColor(Colors.Dawn.ambient, Colors.Day.ambient, t);
+        ambientLight.intensity = THREE.MathUtils.lerp(Colors.Dawn.ambInt, Colors.Day.ambInt, t);
+        sunLight.color = new THREE.Color(0xffffff); sunLight.intensity = 1.2;
+        sunSphere.visible = true; sunSphere.material.color.setHex(0xffff00);
+    }
+    scene.fog.color = scene.background;
+}
+
+function checkAllPointsExposure() {
+    const statusEl = document.getElementById('status');
+    const isNight = currentSunAlt <= 0;
+    let selectedStatusText = "Select a point";
+    let selectedStatusClass = "status-box";
+    let selectedSubText = "";
+
+    points.forEach(pt => {
+        const worldPos = new THREE.Vector3();
+        pt.mesh.getWorldPosition(worldPos);
+        const worldNormal = pt.normal.clone().transformDirection(house.matrixWorld).normalize();
+
+        let isSunlit = false;
+        let isTargetMet = false;
+
+        if (!isNight) {
+            const origin = worldPos.clone().add(worldNormal.clone().multiplyScalar(0.05));
+            const direction = sunLight.position.clone().sub(origin).normalize();
+            raycaster.set(origin, direction);
+            
+            // IGNORE SENSORS IN RAYCAST
+            const rawIntersects = raycaster.intersectObjects([house], true); 
+            const intersects = rawIntersects.filter(hit => !hit.object.userData.isSensor);
+            
+            const dot = worldNormal.dot(direction);
+            if (intersects.length === 0 && dot > 0) isSunlit = true;
+        }
+
+        if (isSunlit && pt.conditions.active) {
+            const c = pt.conditions;
+            const altOk = currentSunAlt >= c.minAlt && currentSunAlt <= c.maxAlt;
+            let azOk = false;
+            if (c.minAz <= c.maxAz) azOk = currentSunAz >= c.minAz && currentSunAz <= c.maxAz;
+            else azOk = currentSunAz >= c.minAz || currentSunAz <= c.maxAz;
+            if (altOk && azOk) isTargetMet = true;
+        }
+
+        let color = isNight ? 0x333333 : (isTargetMet ? 0xffd700 : (isSunlit ? 0x00ff00 : 0xff0000));
+
+        if (pt.id === selectedPointID) {
+            pt.mesh.material.color.setHex(0x0088ff); 
+            pt.mesh.scale.setScalar(1.5);
+            if (isNight) { selectedStatusText = "NIGHT TIME"; selectedStatusClass = "status-box night"; }
+            else if (isTargetMet) { selectedStatusText = "CONDITION MET"; selectedStatusClass = "status-box target"; }
+            else if (isSunlit) { selectedStatusText = "SUNLIT"; selectedStatusClass = "status-box sunlit"; }
+            else { selectedStatusText = "SHADED"; selectedStatusClass = "status-box shaded"; }
+            selectedSubText = `Sun Alt: ${Math.round(currentSunAlt)}° | Az: ${Math.round(currentSunAz)}°`;
+        } else {
+            pt.mesh.material.color.setHex(color);
+            pt.mesh.scale.setScalar(1.0);
+        }
+    });
+
+    if (selectedPointID) {
+        statusEl.innerHTML = `<div>${selectedStatusText}</div><div class="status-subtext">${selectedSubText}</div>`;
+        statusEl.className = selectedStatusClass;
+    } else {
+        statusEl.innerHTML = "Click house to add/edit points.";
+        statusEl.className = "status-box";
+    }
+}
+
+window.addPoint = function(intersect) {
+    const id = crypto.randomUUID();
+    const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshBasicMaterial());
+    mesh.position.copy(intersect.object.worldToLocal(intersect.point.clone()));
+    
+    // Tag the mesh so we can ignore it in raycasts
+    mesh.userData.isSensor = true;
+    
+    intersect.object.add(mesh);
+    
+    // Auto-Name Logic
+    const newName = getNextDefaultName();
+
+    points.push({
+        id: id,
+        name: newName,
+        mesh: mesh,
+        normal: intersect.face.normal.clone(),
+        conditions: { active: false, minAlt: 0, maxAlt: 90, minAz: 0, maxAz: 360 }
+    });
+    selectPoint(id);
+};
+
+window.selectPoint = function(id) {
+    selectedPointID = id;
+    const pt = points.find(p => p.id === id);
+    document.getElementById('selection-buttons').style.display = 'flex';
+    document.getElementById('conditions-panel').style.display = 'block';
+    
+    document.getElementById('pt-name').value = pt.name;
+    document.getElementById('cond-active').checked = pt.conditions.active;
+    document.getElementById('cond-min-alt').value = pt.conditions.minAlt;
+    document.getElementById('cond-max-alt').value = pt.conditions.maxAlt;
+    document.getElementById('cond-min-az').value = pt.conditions.minAz;
+    document.getElementById('cond-max-az').value = pt.conditions.maxAz;
+    
+    checkAllPointsExposure();
+};
+
+window.clearPoints = function() {
+    points.forEach(pt => {
+        if(pt.mesh.parent) pt.mesh.parent.remove(pt.mesh);
+        pt.mesh.geometry.dispose();
+    });
+    points = []; selectedPointID = null;
+    document.getElementById('selection-buttons').style.display = 'none';
+    document.getElementById('conditions-panel').style.display = 'none';
+    checkAllPointsExposure();
+};
+
+window.deleteSelectedPoint = function() {
+    if (!selectedPointID) return;
+    const index = points.findIndex(p => p.id === selectedPointID);
+    if (index > -1) {
+        const pt = points[index];
+        if(pt.mesh.parent) pt.mesh.parent.remove(pt.mesh);
+        pt.mesh.geometry.dispose();
+        points.splice(index, 1);
+    }
+    selectedPointID = null;
+    document.getElementById('selection-buttons').style.display = 'none';
+    document.getElementById('conditions-panel').style.display = 'none';
+    checkAllPointsExposure();
+};
+
+// Set values from current sun position
+window.setFromSun = function(type, boundary) {
+    if (!selectedPointID) {
+        alert("Please select a point first.");
+        return;
+    }
+    
+    // FIX: Use normalized values and ensure integer precision for clean UI
+    const val = (type === 'alt') ? Math.round(currentSunAlt) : Math.round(currentSunAz);
+    const inputId = `cond-${boundary}-${type}`; 
+    const inputEl = document.getElementById(inputId);
+    
+    inputEl.value = val;
+    inputEl.dispatchEvent(new Event('input')); 
+}
+
+renderer.domElement.addEventListener('pointerdown', (event) => {
+    if (event.button !== 0) return;
+    mouse.x = (event.clientX / window.innerWidth) * 2 - 1;
+    mouse.y = -(event.clientY / window.innerHeight) * 2 + 1;
+    raycaster.setFromCamera(mouse, camera);
+
+    const markers = points.map(p => p.mesh);
+    const hitMarkers = raycaster.intersectObjects(markers);
+    if (hitMarkers.length > 0) {
+        const pt = points.find(p => p.mesh === hitMarkers[0].object);
+        if (pt) selectPoint(pt.id);
+        return;
+    }
+
+    const hitHouse = raycaster.intersectObjects([house], true);
+    if (hitHouse.length > 0) {
+        addPoint(hitHouse[0]);
+    } else {
+        selectedPointID = null;
+        document.getElementById('selection-buttons').style.display = 'none';
+        document.getElementById('conditions-panel').style.display = 'none';
+        checkAllPointsExposure();
+    }
+});
+
+document.getElementById('btn-delete').addEventListener('click', deleteSelectedPoint);
+
+['pt-name', 'cond-active', 'cond-min-alt', 'cond-max-alt', 'cond-min-az', 'cond-max-az'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        if (!selectedPointID) return;
+        const pt = points.find(p => p.id === selectedPointID);
+        pt.name = document.getElementById('pt-name').value;
+        pt.conditions.active = document.getElementById('cond-active').checked;
+        pt.conditions.minAlt = parseFloat(document.getElementById('cond-min-alt').value);
+        pt.conditions.maxAlt = parseFloat(document.getElementById('cond-max-alt').value);
+        pt.conditions.minAz = parseFloat(document.getElementById('cond-min-az').value);
+        pt.conditions.maxAz = parseFloat(document.getElementById('cond-max-az').value);
+        checkAllPointsExposure();
+    });
+});
+
+document.getElementById('rotation').addEventListener('input', (e) => {
+    document.getElementById('rot-display').innerText = `${e.target.value}°`;
+    houseGroup.rotation.y = THREE.MathUtils.degToRad(-e.target.value);
+    checkAllPointsExposure();
+});
+
+['width', 'height', 'depth'].forEach(id => {
+    document.getElementById(id).addEventListener('input', () => {
+        if(!isCustomModel) {
+            createHouse(
+                document.getElementById('width').value,
+                document.getElementById('height').value,
+                document.getElementById('depth').value,
+                true 
+            );
+            updateSun();
+        }
+    });
+});
+['lat', 'lon', 'time-slider', 'day-slider'].forEach(id => {
+    document.getElementById(id).addEventListener('input', updateSun);
+});
+
+window.saveState = function() {
+    const data = {
+        house: {
+            w: document.getElementById('width').value,
+            h: document.getElementById('height').value,
+            d: document.getElementById('depth').value,
+            rot: document.getElementById('rotation').value,
+            isCustom: isCustomModel 
+        },
+        loc: { lat: document.getElementById('lat').value, lon: document.getElementById('lon').value },
+        points: points.map(p => ({
+            id: p.id,
+            name: p.name,
+            pos: p.mesh.position.toArray(),
+            norm: p.normal.toArray(),
+            conditions: p.conditions
+        }))
+    };
+    if(isCustomModel) alert("Note: Custom 3D models are not saved in browser storage. Only settings and points.");
+    localStorage.setItem('solarToolData', JSON.stringify(data));
+    alert("Settings saved!");
+};
+
+window.loadState = function() {
+    const raw = localStorage.getItem('solarToolData');
+    if (!raw) return;
+    const data = JSON.parse(raw);
+    
+    document.getElementById('lat').value = data.loc.lat;
+    document.getElementById('lon').value = data.loc.lon;
+    document.getElementById('rotation').value = data.house.rot;
+    document.getElementById('rot-display').innerText = data.house.rot + "°";
+    document.getElementById('width').value = data.house.w;
+    document.getElementById('height').value = data.house.h;
+    document.getElementById('depth').value = data.house.d;
+
+    if (data.house.isCustom) {
+        console.warn("Reverting custom model to box on load.");
+        createHouse(data.house.w, data.house.h, data.house.d, false);
+    } else {
+        createHouse(data.house.w, data.house.h, data.house.d, false);
+    }
+    
+    houseGroup.rotation.y = THREE.MathUtils.degToRad(-data.house.rot);
+
+    points = [];
+    data.points.forEach(pd => {
+        const mesh = new THREE.Mesh(new THREE.SphereGeometry(0.25, 16, 16), new THREE.MeshBasicMaterial());
+        mesh.position.fromArray(pd.pos);
+        mesh.userData.isSensor = true; // Ensure tag is restored
+        house.add(mesh);
+        
+        points.push({
+            id: pd.id,
+            name: pd.name,
+            mesh: mesh,
+            normal: new THREE.Vector3().fromArray(pd.norm),
+            conditions: pd.conditions
+        });
+    });
+    
+    updateSun();
+};
+
+window.generateHA = function() {
+    const activePoints = points.filter(p => p.conditions.active);
+    if(activePoints.length === 0) { alert("No active points."); return; }
+    let yaml = "template:\n  - binary_sensor:\n";
+    activePoints.forEach(p => {
+        const safeName = (p.name || "Solar Point").replace(/[^a-zA-Z0-9 ]/g, "");
+        const c = p.conditions;
+        yaml += `    - name: "${safeName}"\n      state: >\n        {% set elev = state_attr('sun.sun', 'elevation') | float(0) %}\n        {% set az = state_attr('sun.sun', 'azimuth') | float(0) %}\n        {{ elev >= ${c.minAlt} and elev <= ${c.maxAlt} and (az >= ${c.minAz} ${c.minAz > c.maxAz ? 'or' : 'and'} az <= ${c.maxAz}) }}\n\n`;
+    });
+    document.getElementById('ha-yaml-output').value = yaml;
+    document.getElementById('export-modal').style.display = 'block';
+};
+window.closeModal = function() { document.getElementById('export-modal').style.display = 'none'; };
+window.copyToClipboard = function() { navigator.clipboard.writeText(document.getElementById("ha-yaml-output").value); alert("Copied!"); };
+
+window.onload = function() {
+    if(localStorage.getItem('solarToolData')) {
+        loadState();
+    } else {
+        createHouse(10, 6, 15);
+        updateSun();
+    }
+};
+
+function animate() {
+    requestAnimationFrame(animate);
+    controls.update();
+    renderer.render(scene, camera);
+}
+animate();
+
+</script>
+</body>
+</html>
