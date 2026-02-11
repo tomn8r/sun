@@ -435,10 +435,12 @@ function updateSun() {
     updateEnvironment(currentSunAlt);
 
     // Visual Position (Three.js coordinates)
+    // Apply same +180° offset as currentSunAz to align visual with condition checking
+    const azimuthCompass = sunPos.azimuth + Math.PI;
     const dist = 80;
-    const x = dist * Math.cos(sunPos.altitude) * Math.sin(sunPos.azimuth);
+    const x = dist * Math.cos(sunPos.altitude) * Math.sin(azimuthCompass);
     const y = dist * Math.sin(sunPos.altitude);
-    const z = dist * Math.cos(sunPos.altitude) * Math.cos(sunPos.azimuth);
+    const z = dist * Math.cos(sunPos.altitude) * Math.cos(azimuthCompass);
 
     sunLight.position.set(x, y, z);
     sunSphere.position.set(x, y, z);
