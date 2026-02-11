@@ -520,7 +520,9 @@ function checkAllPointsExposure() {
             else if (isTargetMet) { selectedStatusText = "CONDITION MET"; selectedStatusClass = "status-box target"; }
             else if (isSunlit) { selectedStatusText = "SUNLIT"; selectedStatusClass = "status-box sunlit"; }
             else { selectedStatusText = "SHADED"; selectedStatusClass = "status-box shaded"; }
-            selectedSubText = `Sun Alt: ${Math.round(currentSunAlt)}° | Az: ${Math.round(currentSunAz)}°`;
+            // Display azimuth normalized to 0-359 range (360° shows as 0°)
+            const displayAz = Math.round(currentSunAz) % 360;
+            selectedSubText = `Sun Alt: ${Math.round(currentSunAlt)}° | Az: ${displayAz}°`;
         } else {
             pt.mesh.material.color.setHex(color);
             pt.mesh.scale.setScalar(1.0);
