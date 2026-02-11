@@ -430,7 +430,8 @@ function updateSun() {
     // FIX: Calculate raw azimuth and strictly normalize to 0-360 range
     // SunCalc returns South=0, we want North=0 (Standard Compass)
     const rawAz = (sunPos.azimuth * (180/Math.PI)) + 180;
-    currentSunAz = (rawAz + 360) % 360; 
+    // Improved normalization handles all edge cases including very negative values
+    currentSunAz = ((rawAz % 360) + 360) % 360;
     
     updateEnvironment(currentSunAlt);
 
